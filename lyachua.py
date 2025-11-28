@@ -10,17 +10,27 @@ from reportlab.lib.utils import ImageReader
 from PIL import Image
 import matplotlib.pyplot as plt
 
+# --- Cấu hình trang ---
 st.set_page_config(page_title="Sinh Đề GDCD Tự Động", page_icon="📚", layout="wide")
-st.title("📚 Sinh Đề GDCD – LaTeX → ảnh → DOCX/PDF")
+
+# --- Tiêu đề chính + tên trường ---
+st.markdown(
+    """
+    <div style="text-align:center; padding:10px; background-color:#f0f2f6; border-radius:10px;">
+        <h1 style="color:#1f77b4;">📚 Sinh Đề GDCD Tự Động</h1>
+        <h3 style="color:#ff7f0e;">Ly A Chua – Trường PTDTBT TH&THCS Na Ư</h3>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # --- API KEY ---
 api_key = st.secrets.get("GOOGLE_API_KEY", "")
 if not api_key:
     api_key = st.text_input("Nhập Google API Key:", type="password")
 
-# --- GUI ---
+# --- Lớp & Chủ đề ---
 lop_options = ["Lớp 6", "Lớp 7", "Lớp 8", "Lớp 9"]
-
 chuong_options = {
     "Lớp 6": [
         "Chủ đề 1: Quyền và nghĩa vụ cơ bản của công dân",
@@ -49,23 +59,21 @@ bai_options = {
     "Chủ đề 1: Quyền và nghĩa vụ cơ bản của công dân": ["Bài 1: Quyền cơ bản", "Bài 2: Nghĩa vụ cơ bản"],
     "Chủ đề 2: Kỷ luật, pháp luật và trách nhiệm": ["Bài 1: Kỷ luật ở trường học", "Bài 2: Pháp luật cơ bản"],
     "Chủ đề 3: Đạo đức trong học tập và đời sống": ["Bài 1: Trung thực và tôn trọng", "Bài 2: Giúp đỡ bạn bè"],
-
     # --- Lớp 7 ---
     "Chủ đề 1: Quyền và nghĩa vụ trong trường học": ["Bài 1: Quyền học tập", "Bài 2: Nghĩa vụ học tập"],
     "Chủ đề 2: Kỹ năng sống cơ bản": ["Bài 1: Giao tiếp", "Bài 2: Giải quyết mâu thuẫn"],
     "Chủ đề 3: Xây dựng môi trường văn hóa": ["Bài 1: Văn hóa học đường", "Bài 2: Hoạt động tập thể"],
-
     # --- Lớp 8 ---
     "Chủ đề 1: Công dân và pháp luật": ["Bài 1: Luật pháp cơ bản", "Bài 2: Trách nhiệm tuân thủ pháp luật"],
     "Chủ đề 2: Đạo đức nghề nghiệp và trách nhiệm xã hội": ["Bài 1: Đạo đức nghề nghiệp", "Bài 2: Trách nhiệm xã hội"],
     "Chủ đề 3: An toàn và bảo vệ môi trường": ["Bài 1: An toàn cá nhân", "Bài 2: Bảo vệ môi trường"],
-
     # --- Lớp 9 ---
     "Chủ đề 1: Quyền và nghĩa vụ công dân trong xã hội": ["Bài 1: Quyền công dân", "Bài 2: Nghĩa vụ công dân"],
     "Chủ đề 2: Pháp luật và hình thức xử lý vi phạm": ["Bài 1: Hình thức xử lý", "Bài 2: Trách nhiệm pháp lý"],
     "Chủ đề 3: Xây dựng nếp sống văn minh": ["Bài 1: Văn minh nơi công cộng", "Bài 2: Nếp sống văn hóa"]
 }
 
+# --- Sidebar ---
 with st.sidebar:
     st.header("Thông tin sinh đề")
     lop = st.selectbox("Chọn lớp", lop_options)
@@ -83,7 +91,7 @@ with st.sidebar:
     )
     co_dap_an = st.checkbox("Có đáp án", value=True)
 
-# --- BUILD PROMPT ---
+# --- Hàm sinh prompt ---
 def build_prompt(lop, chuong, bai, so_cau, loai_cau, co_dap_an):
     return f"""
 Bạn là giáo viên GDCD. Hãy sinh đề kiểm tra:
@@ -102,7 +110,7 @@ YÊU CẦU QUAN TRỌNG:
 5) Chỉ dùng tiếng Việt.
 """
 
-# --- Gọi API ---
+# --- Gọi API Google Generative ---
 def generate_questions(api_key, lop, chuong, bai, so_cau, loai_cau, co_dap_an):
     MODEL = "models/gemini-2.0-flash"
     url = f"https://generativelanguage.googleapis.com/v1/{MODEL}:generateContent?key={api_key}"
@@ -133,6 +141,7 @@ def render_latex_png_bytes(latex_code, fontsize=20, dpi=200):
     buf.seek(0)
     return buf.read()
 
+# --- Tạo DOCX/PDF ---
 def create_docx_bytes(text):
     doc = Document()
     last = 0
@@ -201,7 +210,7 @@ def create_pdf_bytes(text):
     buf.seek(0)
     return buf
 
-# --- BUTTON ---
+# --- Button sinh đề ---
 if st.button("🎯 Sinh đề ngay"):
     if not api_key:
         st.error("Thiếu API Key!")
@@ -212,7 +221,7 @@ if st.button("🎯 Sinh đề ngay"):
         if isinstance(result, str) and result.startswith("❌"):
             st.error(result)
         else:
-            st.success("🎉 Đã tạo xong đề (hiển thị nội dung).")
+            st.success("🎉 Đã tạo xong đề.")
             st.markdown(result.replace("\n", "<br>"), unsafe_allow_html=True)
 
             latex_blocks = find_latex_blocks(result)
