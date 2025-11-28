@@ -18,7 +18,7 @@ st.markdown(
     """
     <div style="text-align:center; padding:10px; background-color:#f0f2f6; border-radius:10px;">
         <h1 style="color:#1f77b4;">📚 Sinh Đề GDCD Tự Động</h1>
-        <h3 style="color:#ff7f0e;">Ly A Chua – Trường PTDTBT TH&THCS Na Ư</h3>
+        <h3 style="color:#ff7f0e;">Sản phẩm của Thầy giáo: Ly A Chua – Trường PTDTBT TH&THCS Na Ư</h3>
     </div>
     """,
     unsafe_allow_html=True
