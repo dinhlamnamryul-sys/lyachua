@@ -1,255 +1,115 @@
-import re
-import io
-import requests
 import streamlit as st
-from docx import Document
-from docx.shared import Inches
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.utils import ImageReader
+import cv2
+import mediapipe as mp
+import numpy as np
+import os
 from PIL import Image
-import matplotlib.pyplot as plt
+from unidecode import unidecode
+from gtts import gTTS
+import base64
 
-# --- Cấu hình trang ---
-st.set_page_config(page_title="Sinh Đề GDCD Tự Động", page_icon="📚", layout="wide")
+# --- CẤU HÌNH TRANG ---
+st.set_page_config(page_title="NGÔN NGỮ KÝ HIỆU AI", layout="wide")
+st.title("🤟 Hệ Thống Học Ngôn Ngữ Ký Hiệu AI")
 
-# --- Tiêu đề chính + tên trường ---
-st.markdown(
-    """
-    <div style="text-align:center; padding:10px; background-color:#f0f2f6; border-radius:10px;">
-        <h1 style="color:#1f77b4;">📚 Sinh Đề GDCD Tự Động</h1>
-        <h3 style="color:#ff7f0e;">Sản phẩm của Thầy giáo: Ly A Chua – Trường PTDTBT TH&THCS Na Ư</h3>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+# --- KHỞI TẠO MEDIAPIPE ---
+mp_hands = mp.solutions.hands [cite: 14]
+hands = mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) [cite: 15]
+mp_drawing = mp.solutions.drawing_utils [cite: 24]
 
-# --- API KEY ---
-api_key = st.secrets.get("GOOGLE_API_KEY", "")
-if not api_key:
-    api_key = st.text_input("Nhập Google API Key:", type="password")
+# --- HÀM HỖ TRỢ ---
+def get_audio_html(text, lang='vi'):
+    """Tạo HTML để tự động phát âm thanh gTTS trên trình duyệt"""
+    tts = gTTS(text=text, lang=lang)
+    tts.save("temp_audio.mp3")
+    with open("temp_audio.mp3", "rb") as f:
+        data = f.read()
+        b64 = base64.b64encode(data).decode()
+        return f'<audio autoplay="true" src="data:audio/mp3;base64,{b64}">'
 
-# --- Lớp & Chủ đề ---
-lop_options = ["Lớp 6", "Lớp 7", "Lớp 8", "Lớp 9"]
-chuong_options = {
-    "Lớp 6": [
-        "Chủ đề 1: Quyền và nghĩa vụ cơ bản của công dân",
-        "Chủ đề 2: Kỷ luật, pháp luật và trách nhiệm",
-        "Chủ đề 3: Đạo đức trong học tập và đời sống"
-    ],
-    "Lớp 7": [
-        "Chủ đề 1: Quyền và nghĩa vụ trong trường học",
-        "Chủ đề 2: Kỹ năng sống cơ bản",
-        "Chủ đề 3: Xây dựng môi trường văn hóa"
-    ],
-    "Lớp 8": [
-        "Chủ đề 1: Công dân và pháp luật",
-        "Chủ đề 2: Đạo đức nghề nghiệp và trách nhiệm xã hội",
-        "Chủ đề 3: An toàn và bảo vệ môi trường"
-    ],
-    "Lớp 9": [
-        "Chủ đề 1: Quyền và nghĩa vụ công dân trong xã hội",
-        "Chủ đề 2: Pháp luật và hình thức xử lý vi phạm",
-        "Chủ đề 3: Xây dựng nếp sống văn minh"
-    ]
-}
+def process_frame(frame):
+    """Xử lý khung hình để vẽ landmarks"""
+    image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) [cite: 73]
+    results = hands.process(image_rgb) [cite: 76]
+    
+    if results.multi_hand_landmarks: [cite: 89]
+        for hand_landmarks in results.multi_hand_landmarks: [cite: 90]
+            mp_drawing.draw_landmarks(
+                frame, 
+                hand_landmarks, 
+                mp_hands.HAND_CONNECTIONS,
+                mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2, circle_radius=2), [cite: 27]
+                mp_drawing.DrawingSpec(color=(200, 0, 0), thickness=2, circle_radius=2) [cite: 28]
+            )
+    return frame
 
-bai_options = {
-    # --- Lớp 6 ---
-    "Chủ đề 1: Quyền và nghĩa vụ cơ bản của công dân": ["Bài 1: Quyền cơ bản", "Bài 2: Nghĩa vụ cơ bản"],
-    "Chủ đề 2: Kỷ luật, pháp luật và trách nhiệm": ["Bài 1: Kỷ luật ở trường học", "Bài 2: Pháp luật cơ bản"],
-    "Chủ đề 3: Đạo đức trong học tập và đời sống": ["Bài 1: Trung thực và tôn trọng", "Bài 2: Giúp đỡ bạn bè"],
-    # --- Lớp 7 ---
-    "Chủ đề 1: Quyền và nghĩa vụ trong trường học": ["Bài 1: Quyền học tập", "Bài 2: Nghĩa vụ học tập"],
-    "Chủ đề 2: Kỹ năng sống cơ bản": ["Bài 1: Giao tiếp", "Bài 2: Giải quyết mâu thuẫn"],
-    "Chủ đề 3: Xây dựng môi trường văn hóa": ["Bài 1: Văn hóa học đường", "Bài 2: Hoạt động tập thể"],
-    # --- Lớp 8 ---
-    "Chủ đề 1: Công dân và pháp luật": ["Bài 1: Luật pháp cơ bản", "Bài 2: Trách nhiệm tuân thủ pháp luật"],
-    "Chủ đề 2: Đạo đức nghề nghiệp và trách nhiệm xã hội": ["Bài 1: Đạo đức nghề nghiệp", "Bài 2: Trách nhiệm xã hội"],
-    "Chủ đề 3: An toàn và bảo vệ môi trường": ["Bài 1: An toàn cá nhân", "Bài 2: Bảo vệ môi trường"],
-    # --- Lớp 9 ---
-    "Chủ đề 1: Quyền và nghĩa vụ công dân trong xã hội": ["Bài 1: Quyền công dân", "Bài 2: Nghĩa vụ công dân"],
-    "Chủ đề 2: Pháp luật và hình thức xử lý vi phạm": ["Bài 1: Hình thức xử lý", "Bài 2: Trách nhiệm pháp lý"],
-    "Chủ đề 3: Xây dựng nếp sống văn minh": ["Bài 1: Văn minh nơi công cộng", "Bài 2: Nếp sống văn hóa"]
-}
+# --- GIAO DIỆN SIDEBAR (TÌM KIẾM) ---
+st.sidebar.header("🔍 Tìm kiếm ký hiệu")
+search_query = st.sidebar.text_input("Nhập câu nói hoặc chữ cái:") [cite: 165, 167]
+chude_option = st.sidebar.selectbox("Chủ đề:", 
+    ["Tất cả", "đồ dùng học tập", "động vật", "gia đình", "giao thông", "trái cây"]) [cite: 178, 180, 181, 182, 183, 184]
 
-# --- Sidebar ---
-with st.sidebar:
-    st.header("Thông tin sinh đề")
-    lop = st.selectbox("Chọn lớp", lop_options)
-    chuong = st.selectbox("Chọn chủ đề/chương", chuong_options[lop])
-    bai_list = bai_options.get(chuong, [])
-    if bai_list:
-        bai = st.selectbox("Chọn bài", bai_list)
+if st.sidebar.button("Tìm kiếm"): [cite: 169]
+    found = False
+    name_clean = unidecode(search_query).lower().strip() [cite: 31]
+    
+    # Logic quét thư mục từ mã gốc [cite: 33, 35, 47]
+    folders = ["video_train", "anh_train", "đồ dùng học tập", "động vật", "gia đình", "giao thông", "trái cây"]
+    if chude_option != "Tất cả":
+        folders = [chude_option]
+
+    for folder in folders:
+        if os.path.exists(folder):
+            for file in os.listdir(folder):
+                if unidecode(os.path.splitext(file)[0]).lower() == name_clean:
+                    file_path = os.path.join(folder, file) [cite: 53]
+                    st.write(f"Kết quả cho: **{search_query}**")
+                    
+                    if file.lower().endswith(('.mp4', '.avi', '.mkv')): [cite: 54]
+                        st.video(file_path) [cite: 55]
+                    else:
+                        st.image(file_path) [cite: 57]
+                    
+                    # Phát âm thanh thông báo
+                    st.components.v1.html(get_audio_html(f"Kết quả của {search_query}"), height=0)
+                    found = True
+                    break
+    if not found:
+        st.sidebar.error("Không tìm thấy ngôn ngữ ký hiệu phù hợp") [cite: 61]
+
+# --- GIAO DIỆN CHÍNH (NHẬN DIỆN CAMERA) ---
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    st.subheader("📷 Nhận diện trực tiếp")
+    run_camera = st.checkbox("Bật Camera nhận diện") [cite: 173]
+    FRAME_WINDOW = st.image([])
+
+    if run_camera:
+        cap = cv2.VideoCapture(0) [cite: 64]
+        while run_camera:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            frame = cv2.flip(frame, 1)
+            frame = process_frame(frame)
+            frame_display = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            FRAME_WINDOW.image(frame_display)
+        cap.release()
     else:
-        bai = st.text_input("Chưa có bài cho chủ đề này", "")
+        st.info("Nhấn dấu tích ở trên để bắt đầu nhận diện tay qua Camera.")
 
-    so_cau = st.number_input("Số câu hỏi", min_value=1, max_value=50, value=10)
-    loai_cau = st.selectbox(
-        "Loại câu hỏi",
-        ["Trắc nghiệm 4 lựa chọn", "Trắc nghiệm Đúng – Sai", "Câu trả lời ngắn", "Tự luận", "Trộn ngẫu nhiên"]
-    )
-    co_dap_an = st.checkbox("Có đáp án", value=True)
-
-# --- Hàm sinh prompt ---
-def build_prompt(lop, chuong, bai, so_cau, loai_cau, co_dap_an):
-    return f"""
-Bạn là giáo viên GDCD. Hãy sinh đề kiểm tra:
-- Lớp: {lop}
-- Chủ đề/Chương: {chuong}
-- Bài: {bai}
-- Số câu hỏi: {so_cau}
-- Loại câu hỏi: {loai_cau}
-- {"Có đáp án" if co_dap_an else "Không có đáp án"}
-
-YÊU CẦU QUAN TRỌNG:
-1) Toàn bộ công thức (nếu có) phải viết bằng LaTeX $$...$$.
-2) Câu trắc nghiệm: A. ... B. ... C. ... D. ...
-3) Câu trả lời ngắn: 1 dòng.
-4) Đáp án dưới câu hỏi, cách 2 dòng trống.
-5) Chỉ dùng tiếng Việt.
-"""
-
-# --- Gọi API Google Generative ---
-def generate_questions(api_key, lop, chuong, bai, so_cau, loai_cau, co_dap_an):
-    MODEL = "models/gemini-2.0-flash"
-    url = f"https://generativelanguage.googleapis.com/v1/{MODEL}:generateContent?key={api_key}"
-    prompt = build_prompt(lop, chuong, bai, so_cau, loai_cau, co_dap_an)
-    payload = {"contents":[{"role":"user","parts":[{"text":prompt}]}]}
-    try:
-        r = requests.post(url, json=payload, timeout=30)
-        if r.status_code != 200:
-            return f"❌ Lỗi API {r.status_code}: {r.text}"
-        j = r.json()
-        return j["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception as e:
-        return f"❌ Lỗi kết nối: {e}"
-
-# --- Xử lý LaTeX ---
-LATEX_RE = re.compile(r"\$\$(.+?)\$\$", re.DOTALL)
-def find_latex_blocks(text):
-    return [(m.span(), m.group(0), m.group(1)) for m in LATEX_RE.finditer(text)]
-
-def render_latex_png_bytes(latex_code, fontsize=20, dpi=200):
-    fig = plt.figure()
-    fig.patch.set_alpha(0.0)
-    fig.text(0, 0, f"${latex_code}$", fontsize=fontsize)
-    buf = io.BytesIO()
-    plt.axis('off')
-    plt.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0.02, transparent=True)
-    plt.close(fig)
-    buf.seek(0)
-    return buf.read()
-
-# --- Tạo DOCX/PDF ---
-def create_docx_bytes(text):
-    doc = Document()
-    last = 0
-    for span, full, inner in find_latex_blocks(text):
-        start, end = span
-        before = text[last:start]
-        for line in before.splitlines():
-            doc.add_paragraph(line)
-        try:
-            png_bytes = render_latex_png_bytes(inner)
-            img_stream = io.BytesIO(png_bytes)
-            p = doc.add_paragraph()
-            r = p.add_run()
-            r.add_picture(img_stream, width=Inches(3))
-        except:
-            doc.add_paragraph(full)
-        last = end
-    for line in text[last:].splitlines():
-        doc.add_paragraph(line)
-    out = io.BytesIO()
-    doc.save(out)
-    out.seek(0)
-    return out
-
-def create_pdf_bytes(text):
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=letter)
-    width, height = letter
-    margin = 40
-    y = height - 50
-    last = 0
-    for span, full, inner in find_latex_blocks(text):
-        start, end = span
-        before = text[last:start]
-        for line in before.splitlines():
-            c.drawString(margin, y, line)
-            y -= 14
-            if y < 60:
-                c.showPage()
-                y = height - 50
-        try:
-            png_bytes = render_latex_png_bytes(inner)
-            img_reader = ImageReader(io.BytesIO(png_bytes))
-            img = Image.open(io.BytesIO(png_bytes))
-            draw_w = 300
-            draw_h = img.height / img.width * draw_w
-            if y - draw_h < 60:
-                c.showPage()
-                y = height - 50
-            c.drawImage(img_reader, margin, y - draw_h, width=draw_w, height=draw_h, mask='auto')
-            y -= draw_h + 8
-        except:
-            c.drawString(margin, y, full)
-            y -= 14
-            if y < 60:
-                c.showPage()
-                y = height - 50
-        last = end
-    for line in text[last:].splitlines():
-        c.drawString(margin, y, line)
-        y -= 14
-        if y < 60:
-            c.showPage()
-            y = height - 50
-    c.save()
-    buf.seek(0)
-    return buf
-
-# --- Button sinh đề ---
-if st.button("🎯 Sinh đề ngay"):
-    if not api_key:
-        st.error("Thiếu API Key!")
-    else:
-        with st.spinner("⏳ AI đang tạo đề..."):
-            result = generate_questions(api_key, lop, chuong, bai, so_cau, loai_cau, co_dap_an)
-
-        if isinstance(result, str) and result.startswith("❌"):
-            st.error(result)
-        else:
-            st.success("🎉 Đã tạo xong đề.")
-            st.markdown(result.replace("\n", "<br>"), unsafe_allow_html=True)
-
-            latex_blocks = find_latex_blocks(result)
-            if not latex_blocks:
-                st.warning("Không tìm thấy LaTeX. Xuất TXT.")
-                st.download_button(
-                    "📥 Tải TXT", data=result.encode("utf-8"),
-                    file_name=f"De_{lop}_{chuong}_{bai}.txt", mime="text/plain"
-                )
-            else:
-                try:
-                    docx_io = create_docx_bytes(result)
-                    st.download_button(
-                        "📥 Tải DOCX",
-                        data=docx_io.getvalue(),
-                        file_name=f"De_{lop}_{chuong}_{bai}.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    )
-                except Exception as e:
-                    st.error(f"Không tạo DOCX: {e}")
-
-                try:
-                    pdf_io = create_pdf_bytes(result)
-                    st.download_button(
-                        "📥 Tải PDF",
-                        data=pdf_io.getvalue(),
-                        file_name=f"De_{lop}_{chuong}_{bai}.pdf",
-                        mime="application/pdf"
-                    )
-                except Exception as e:
-                    st.error(f"Không tạo PDF: {e}")
+with col2:
+    st.subheader("💡 Hướng dẫn & Ghi chú")
+    st.markdown("""
+    - **Ă, Â, Ê, Ô...**: Kết hợp chữ cái gốc và vẽ dấu trong khung hình.
+    - **Phân biệt Số/Chữ**: Hệ thống sẽ dựa vào thời gian giữ tay (Hold time) hoặc chế độ chọn.
+    - **Giọng nói**: Bạn có thể dùng biểu tượng micro trên bàn phím điện thoại/máy tính để nhập vào ô tìm kiếm.
+    """)
+    
+    # Upload video để phân tích [cite: 149, 150]
+    uploaded_file = st.file_uploader("Hoặc tải lên video để phân tích", type=['mp4', 'avi', 'mkv'])
+    if uploaded_file is not None:
+        st.video(uploaded_file)
+        st.success(f"Đã tải lên: {uploaded_file.name}")
