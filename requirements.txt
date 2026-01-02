@@ -1,6 +1,6 @@
-python-docx
-requests
-Pillow
-matplotlib
-reportlab
 streamlit
+opencv-python-headless
+mediapipe
+unidecode
+gTTS
+numpy
