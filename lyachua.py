@@ -1,97 +1,194 @@
-import streamlit as st
-import cv2
-import mediapipe as mp
-import numpy as np
-import os
-from unidecode import unidecode
-from gtts import gTTS
-import base64
+[cite_start]import os [cite: 1]
+[cite_start]import tkinter as tk [cite: 2]
+[cite_start]from tkinter import filedialog, messagebox [cite: 3]
+[cite_start]from PIL import Image, ImageTk [cite: 4]
+[cite_start]from gtts import gTTS [cite: 5]
+[cite_start]import cv2 [cite: 6]
+[cite_start]import mediapipe as mp [cite: 7]
+[cite_start]from unidecode import unidecode [cite: 8]
+[cite_start]import time [cite: 9]
+[cite_start]import pygame [cite: 10]
+[cite_start]import subprocess [cite: 11]
 
-# --- CẤU HÌNH MEDIAPIPE ---
-mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5)
-mp_drawing = mp.solutions.drawing_utils
+# [cite_start]Khởi tạo Mediapipe cho Pose và Hands [cite: 12, 14]
+[cite_start]mp_pose = mp.solutions.pose [cite: 12]
+[cite_start]pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) [cite: 13]
+[cite_start]mp_hands = mp.solutions.hands [cite: 14]
+[cite_start]hands = mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) [cite: 15]
 
-# --- HÀM HỖ TRỢ ---
-def get_audio_html(text):
-    """Tạo âm thanh tiếng Việt để phát trên trình duyệt"""
-    try:
-        tts = gTTS(text=f"Câu nói là: {text}", lang='vi')
-        tts.save("temp_audio.mp3")
-        with open("temp_audio.mp3", "rb") as f:
-            data = f.read()
-            b64 = base64.b64encode(data).decode()
-            return f'<audio autoplay="true" src="data:audio/mp3;base64,{b64}">'
-    except:
-        return ""
+# [cite_start]Cấu hình style vẽ nét mảnh hơn [cite: 23, 24]
+[cite_start]drawing_utils = mp.solutions.drawing_utils [cite: 24]
+[cite_start]pose_landmark_style = drawing_utils.DrawingSpec(color=(0, 255, 0), thickness=1, circle_radius=1) [cite: 25]
+[cite_start]pose_connection_style = drawing_utils.DrawingSpec(color=(0, 200, 0), thickness=1, circle_radius=1) [cite: 26]
+[cite_start]hand_landmark_style = drawing_utils.DrawingSpec(color=(255, 0, 0), thickness=1, circle_radius=1) [cite: 27]
+[cite_start]hand_connection_style = drawing_utils.DrawingSpec(color=(200, 0, 0), thickness=1, circle_radius=1) [cite: 28]
 
-def search_file(name, category):
-    """Tìm kiếm file video hoặc ảnh dựa trên tên và chủ đề"""
-    name_clean = unidecode(name).lower().strip()
-    folders = ["video_train", "anh_train", "đồ dùng học tập", "động vật", "gia đình", "giao thông", "trái cây"]
+[cite_start]def run_nhadientay(): [cite: 16]
+    [cite_start]try: [cite: 17]
+        [cite_start]subprocess.run(['python', 'nhandientay.py'], check=True) [cite: 18]
+        [cite_start]print("Chạy file nhadientay.py thành công.") [cite: 19]
+    [cite_start]except Exception as e: [cite: 20]
+        [cite_start]print(f"Lỗi khi chạy file nhadientay.py: {e}") [cite: 21]
+        [cite_start]messagebox.showerror("Lỗi", f"Lỗi khi chạy file nhadientay.py: {e}") [cite: 22]
+
+[cite_start]def search_and_display(): [cite: 29]
+    [cite_start]name = entry.get().strip() [cite: 30]
+    [cite_start]name = unidecode(name).lower() [cite: 31]
+    [cite_start]found = False [cite: 32]
+    [cite_start]folders_to_search = [] [cite: 33]
     
-    if category != "Tất cả":
-        folders = [category]
+    # [cite_start]Xác định thư mục cần tìm kiếm dựa trên chủ đề được chọn [cite: 34-46]
+    [cite_start]if var_chude.get() == "all": [cite: 34]
+        [cite_start]folders_to_search = ["video_train", "anh_train", "đồ dùng học tập", "động vật", "gia đình", "giao thông", "trái cây"] [cite: 35]
+    [cite_start]else: [cite: 36]
+        [cite_start]if var_chude.get() == "đồ dùng học tập": [cite: 37]
+            [cite_start]folders_to_search.append("đồ dùng học tập") [cite: 38]
+        [cite_start]elif var_chude.get() == "động vật": [cite: 39]
+            [cite_start]folders_to_search.append("động vật") [cite: 40]
+        [cite_start]elif var_chude.get() == "gia đình": [cite: 41]
+            [cite_start]folders_to_search.append("gia đình") [cite: 42]
+        [cite_start]elif var_chude.get() == "giao thông": [cite: 43]
+            [cite_start]folders_to_search.append("giao thông") [cite: 44]
+        [cite_start]elif var_chude.get() == "trái cây": [cite: 45]
+            [cite_start]folders_to_search.append("trái cây") [cite: 46]
 
-    for folder in folders:
-        if os.path.exists(folder):
-            for file in os.listdir(folder):
-                file_no_ext = unidecode(os.path.splitext(file)[0]).lower().strip()
-                if name_clean == file_no_ext:
-                    return os.path.join(folder, file)
-    return None
+    [cite_start]for folder in folders_to_search: [cite: 47]
+        [cite_start]if os.path.exists(folder): [cite: 48]
+            [cite_start]for file in os.listdir(folder): [cite: 49]
+                [cite_start]file_name_without_ext = os.path.splitext(file)[0].strip() [cite: 50]
+                [cite_start]file_name_without_ext = unidecode(file_name_without_ext).lower() [cite: 51]
+                [cite_start]if name == file_name_without_ext: [cite: 52]
+                    [cite_start]file_path = os.path.join(folder, file) [cite: 53]
+                    [cite_start]if file.lower().endswith(('.mp4', '.avi', '.mkv')): [cite: 54]
+                        [cite_start]play_video(file_path) [cite: 55]
+                    [cite_start]elif file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff')): [cite: 56]
+                        [cite_start]display_image(file_path) [cite: 57]
+                    [cite_start]found = True [cite: 58]
+                    [cite_start]break [cite: 59]
+    [cite_start]if not found: [cite: 60]
+        [cite_start]messagebox.showinfo("Thông báo", "Không tìm thấy ngôn ngữ ký hiệu nào phù hợp") [cite: 61]
 
-# --- GIAO DIỆN STREAMLIT ---
-st.set_page_config(page_title="NGÔN NGỮ KÝ HIỆU AI", layout="wide")
-st.title("🤟 Hệ Thống Ngôn Ngữ Ký Hiệu AI")
-
-col_left, col_right = st.columns([2, 1])
-
-with col_left:
-    st.subheader("📷 Camera Nhận Diện")
-    run_cam = st.toggle("Bật Camera")
-    FRAME_WINDOW = st.image([])
-
-    if run_cam:
-        cap = cv2.VideoCapture(0)
-        while run_cam:
-            ret, frame = cap.read()
-            if not ret:
-                st.error("Không thể truy cập Camera.")
-                break
+[cite_start]def play_video(file_path): [cite: 62]
+    [cite_start]try: [cite: 63]
+        [cite_start]cap = cv2.VideoCapture(file_path) [cite: 64]
+        [cite_start]if not cap.isOpened(): [cite: 65]
+            [cite_start]raise Exception(f"Không thể mở video: {file_path}") [cite: 66]
+        [cite_start]while True: [cite: 67]
+            [cite_start]ret, frame = cap.read() [cite: 68]
+            [cite_start]if not ret: [cite: 69]
+                [cite_start]break [cite: 70]
             
-            frame = cv2.flip(frame, 1)
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = hands.process(rgb_frame)
-
-            # Vẽ kết quả nhận diện tay
-            if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    mp_drawing.draw_landmarks(
-                        rgb_frame, 
-                        hand_landmarks, 
-                        mp_hands.HAND_CONNECTIONS
-                    )
+            # [cite_start]Xử lý nhận diện trên frame nhỏ [cite: 71-76]
+            [cite_start]frame_small = cv2.resize(frame, (320, 240)) [cite: 72]
+            [cite_start]frame_small_rgb = cv2.cvtColor(frame_small, cv2.COLOR_BGR2RGB) [cite: 73]
+            [cite_start]results_pose = pose.process(frame_small_rgb) [cite: 75]
+            [cite_start]results_hands = hands.process(frame_small_rgb) [cite: 76]
             
-            FRAME_WINDOW.image(rgb_frame)
-        cap.release()
+            # [cite_start]Hiển thị trên frame lớn [cite: 77-79]
+            [cite_start]frame_display = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_LINEAR) [cite: 78]
+            [cite_start]frame_display_rgb = cv2.cvtColor(frame_display, cv2.COLOR_BGR2RGB) [cite: 79]
+            
+            # [cite_start]Vẽ kết quả nhận diện [cite: 80-97]
+            [cite_start]if results_pose.pose_landmarks: [cite: 81]
+                mp.solutions.drawing_utils.draw_landmarks(
+                    frame_display_rgb, results_pose.pose_landmarks, mp_pose.POSE_CONNECTIONS,
+                    [cite_start]landmark_drawing_spec=pose_landmark_style, connection_drawing_spec=pose_connection_style) [cite: 82-88]
+            
+            [cite_start]if results_hands.multi_hand_landmarks: [cite: 89]
+                [cite_start]for hand_landmarks in results_hands.multi_hand_landmarks: [cite: 90]
+                    mp.solutions.drawing_utils.draw_landmarks(
+                        frame_display_rgb, hand_landmarks, mp_hands.HAND_CONNECTIONS,
+                        [cite_start]landmark_drawing_spec=hand_landmark_style, connection_drawing_spec=hand_connection_style) [cite: 91-97]
+            
+            # [cite_start]Cập nhật lên Tkinter Canvas [cite: 98-105]
+            [cite_start]frame_image = Image.fromarray(frame_display_rgb) [cite: 101]
+            [cite_start]frame_tk = ImageTk.PhotoImage(image=frame_image) [cite: 102]
+            [cite_start]canvas.create_image(0, 0, anchor="nw", image=frame_tk) [cite: 103]
+            [cite_start]canvas.image = frame_tk [cite: 104]
+            [cite_start]canvas.update() [cite: 105]
+        [cite_start]cap.release() [cite: 106]
+    [cite_start]except Exception as e: [cite: 107]
+        [cite_start]messagebox.showerror("Lỗi phát video", f"Không thể phát video: {e}") [cite: 108]
 
-with col_right:
-    st.subheader("🔍 Tra cứu")
-    search_query = st.text_input("Nhập chữ cái hoặc từ khóa:")
-    category_option = st.selectbox("Chủ đề:", 
-        ["Tất cả", "đồ dùng học tập", "động vật", "gia đình", "giao thông", "trái cây"])
+[cite_start]def display_image(file_path): [cite: 109]
+    [cite_start]try: [cite: 110]
+        [cite_start]image = Image.open(file_path) [cite: 111]
+        [cite_start]image = image.resize((640, 480), Image.Resampling.LANCZOS) [cite: 112]
+        [cite_start]image_tk = ImageTk.PhotoImage(image) [cite: 113]
+        [cite_start]canvas.create_image(0, 0, anchor="nw", image=image_tk) [cite: 114]
+        [cite_start]canvas.image = image_tk [cite: 115]
+        [cite_start]canvas.update() [cite: 116]
+    [cite_start]except Exception as e: [cite: 117]
+        [cite_start]messagebox.showerror("Lỗi hiển thị ảnh", f"Không thể hiển thị ảnh: {e}") [cite: 118]
+
+[cite_start]def play_audio(file_name): [cite: 119]
+    [cite_start]file_path = "temp_audio.mp3" [cite: 120]
+    [cite_start]if os.path.exists(file_path): [cite: 121]
+        [cite_start]try: [cite: 122]
+            [cite_start]os.remove(file_path) [cite: 123]
+        [cite_start]except Exception as e: [cite: 125]
+            [cite_start]print(f"Không thể xóa tệp cũ: {e}") [cite: 126]
+    [cite_start]try: [cite: 127]
+        [cite_start]tts = gTTS(text=f"Câu nói là: {file_name}", lang='vi') [cite: 128]
+        [cite_start]tts.save(file_path) [cite: 129]
+    [cite_start]except Exception as e: [cite: 131]
+        [cite_start]print(f"Lỗi khi tạo tệp âm thanh: {e}") [cite: 132]
+        [cite_start]return [cite: 133]
     
-    if st.button("Tìm kiếm"):
-        if search_query:
-            result_path = search_file(search_query, category_option)
-            if result_path:
-                st.success(f"Kết quả cho: {search_query}")
-                if result_path.lower().endswith(('.mp4', '.avi', '.mkv')):
-                    st.video(result_path)
-                else:
-                    st.image(result_path)
-                # Phát âm thanh
-                st.components.v1.html(get_audio_html(search_query), height=0)
-            else:
-                st.error("Không tìm thấy dữ liệu.")
+    [cite_start]pygame.mixer.init() [cite: 134]
+    [cite_start]try: [cite: 135]
+        [cite_start]pygame.mixer.music.load(file_path) [cite: 136]
+        [cite_start]pygame.mixer.music.play() [cite: 137]
+        [cite_start]while pygame.mixer.music.get_busy(): [cite: 138]
+            [cite_start]time.sleep(0.2) [cite: 139]
+        [cite_start]if os.path.exists(file_path): [cite: 141]
+            [cite_start]os.remove(file_path) [cite: 142]
+    [cite_start]except Exception as e: [cite: 144]
+        [cite_start]print(f"Lỗi khi phát âm thanh: {e}") [cite: 145]
+    [cite_start]finally: [cite: 146]
+        [cite_start]pygame.mixer.quit() [cite: 147]
+
+[cite_start]def play_predefined_video(): [cite: 149]
+    [cite_start]video_file = filedialog.askopenfilename(title="Chọn video", filetypes=[("Video Files", "*.mp4;*.avi;*.mkv")]) [cite: 150]
+    [cite_start]if video_file: [cite: 151]
+        [cite_start]try: [cite: 152]
+            [cite_start]file_name = os.path.splitext(os.path.basename(video_file))[0] [cite: 153]
+            [cite_start]play_video(video_file) [cite: 154]
+            [cite_start]play_audio(file_name) [cite: 155]
+        [cite_start]except Exception as e: [cite: 156]
+            [cite_start]messagebox.showerror("Lỗi", f"Lỗi khi phát video: {e}") [cite: 157]
+
+# [cite_start]Giao diện chính [cite: 158-164]
+[cite_start]root = tk.Tk() [cite: 158]
+[cite_start]root.title("NGÔN NGỮ KÝ HIỆU AI") [cite: 159]
+[cite_start]root.geometry("640x700") [cite: 160]
+
+[cite_start]canvas = tk.Canvas(root, width=640, height=480, bg="black") [cite: 161]
+[cite_start]canvas.pack() [cite: 162]
+
+[cite_start]frame_search = tk.Frame(root) [cite: 163]
+[cite_start]frame_search.pack(pady=10) [cite: 164]
+
+[cite_start]tk.Label(frame_search, text="Nhập câu nói hoặc chữ cái:").pack(side=tk.LEFT) [cite: 165, 166]
+[cite_start]entry = tk.Entry(frame_search, width=30) [cite: 167]
+[cite_start]entry.pack(side=tk.LEFT, padx=5) [cite: 168]
+
+[cite_start]search_button = tk.Button(frame_search, text="Tìm kiếm", command=search_and_display) [cite: 169]
+[cite_start]search_button.pack(side=tk.LEFT) [cite: 170]
+
+[cite_start]tk.Button(root, text="Lấy video có sẵn", command=play_predefined_video).pack(pady=10) [cite: 171, 172]
+[cite_start]tk.Button(root, text="Chạy Nhận Diện Tay", command=run_nhadientay).pack(pady=10) [cite: 173, 174]
+
+# [cite_start]Lựa chọn chủ đề [cite: 175-189]
+[cite_start]var_chude = tk.StringVar(value="none") [cite: 175]
+[cite_start]chude = tk.Frame(root) [cite: 176]
+[cite_start]chude.pack(pady=10) [cite: 177]
+
+[cite_start]tk.Radiobutton(chude, text="Tìm trong tất cả chủ đề", variable=var_chude, value="all").pack(side=tk.LEFT, padx=5) [cite: 178, 179]
+[cite_start]tk.Radiobutton(chude, text="Đồ dùng học tập", variable=var_chude, value="đồ dùng học tập").pack(side=tk.LEFT, padx=5) [cite: 180, 181]
+[cite_start]tk.Radiobutton(chude, text="Động vật", variable=var_chude, value="động vật").pack(side=tk.LEFT, padx=5) [cite: 182, 183]
+[cite_start]tk.Radiobutton(chude, text="Gia đình", variable=var_chude, value="gia đình").pack(side=tk.LEFT, padx=5) [cite: 184, 185]
+[cite_start]tk.Radiobutton(chude, text="Giao thông", variable=var_chude, value="giao thông").pack(side=tk.LEFT, padx=5) [cite: 186, 187]
+[cite_start]tk.Radiobutton(chude, text="Trái cây", variable=var_chude, value="trái cây").pack(side=tk.LEFT, padx=5) [cite: 188, 189]
+
+[cite_start]root.mainloop() [cite: 190]
